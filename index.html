@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>АвтоДиагност — Помощник</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #121212;
+            color: #e0e0e0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        header {
+            background: #1e1e1e;
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid #ff9800;
+        }
+        header h1 { color: #ff9800; font-size: 28px; }
+        header p { color: #aaa; margin-top: 5px; }
+        .container {
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 0 20px;
+            flex: 1;
+        }
+        .search-box {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+        }
+        .search-box input {
+            flex: 1;
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: 1px solid #444;
+            background: #1e1e1e;
+            color: #fff;
+            font-size: 16px;
+        }
+        .search-box button {
+            padding: 12px 24px;
+            border-radius: 8px;
+            border: none;
+            background: #ff9800;
+            color: #000;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        .search-box button:hover { background: #e68900; }
+        .result {
+            background: #1e1e1e;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            border-left: 4px solid #ff9800;
+            display: none;
+        }
+        .result.active { display: block; }
+        .result h2 { color: #ff9800; margin-bottom: 10px; }
+        .result .desc { color: #ccc; margin-bottom: 15px; line-height: 1.6; }
+        .result h3 { color: #fff; margin: 15px 0 10px; font-size: 18px; }
+        .result ul { list-style: none; padding-left: 0; }
+        .result ul li {
+            padding: 8px 0 8px 25px;
+            position: relative;
+            color: #bbb;
+            line-height: 1.5;
+            border-bottom: 1px solid #2a2a2a;
+        }
+        .result ul li:last-child { border-bottom: none; }
+        .result ul li::before {
+            content: "✔";
+            position: absolute;
+            left: 0;
+            color: #4caf50;
+            font-weight: bold;
+        }
+        .result ul li.warn::before {
+            content: "⚠";
+            color: #ff5722;
+        }
+        .result .note {
+            margin-top: 15px;
+            padding: 12px;
+            background: #2a2a2a;
+            border-radius: 8px;
+            font-size: 14px;
+            color: #aaa;
+            border-left: 3px solid #2196f3;
+        }
+        .error-msg {
+            color: #ff5722;
+            text-align: center;
+            padding: 20px;
+            display: none;
+        }
+        .error-msg.active { display: block; }
+        .suggestions {
+            margin-top: 20px;
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+        }
+        .suggestions span {
+            display: inline-block;
+            background: #2a2a2a;
+            padding: 5px 12px;
+            border-radius: 20px;
+            margin: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .suggestions span:hover { background: #3a3a3a; color: #ff9800; }
+        footer {
+            text-align: center;
+            padding: 20px;
+            color: #555;
+            font-size: 12px;
+            border-top: 1px solid #222;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>🚗 АвтоДиагност</h1>
+        <p>Введите код ошибки — получите расшифровку и чек-лист проверки</p>
+    </header>
+
+    <div class="container">
+        <div class="search-box">
+            <input type="text" id="codeInput" placeholder="Например: P0301, 00537, U0100..." autocomplete="off">
+            <button onclick="searchCode()">Найти</button>
+        </div>
+
+        <div id="result" class="result">
+            <h2 id="resultCode"></h2>
+            <p class="desc" id="resultDesc"></p>
+            <h3>🔧 Что проверить (чек-лист):</h3>
+            <ul id="checklist"></ul>
+            <div class="note" id="resultNote"></div>
+        </div>
+
+        <div id="errorMsg" class="error-msg">
+            ❌ Код не найден в базе. Попробуйте другой код или добавьте его позже.
+        </div>
+
+        <div class="suggestions">
+            Популярные коды:
+            <span onclick="setCode('P0301')">P0301</span>
+            <span onclick="setCode('P0420')">P0420</span>
+            <span onclick="setCode('P0171')">P0171</span>
+            <span onclick="setCode('00537')">00537</span>
+            <span onclick="setCode('U0100')">U0100</span>
+        </div>
+    </div>
+
+    <footer>
+        ⚠️ Информация носит справочный характер. Точную диагностику проводите на СТО.
+    </footer>
+
+    <script>
+        // База данных кодов (пример)
+        const db = {
+            "P0301": {
+                desc: "Пропуск зажигания в цилиндре 1. Двигатель может троить, терять мощность, возможен повышенный расход топлива.",
+                checklist: [
+                    "Проверить свечу зажигания цилиндра 1 (состояние, зазор).",
+                    "Поменять местами катушку зажигания с соседним цилиндром — если ошибка перешла, виновата катушка.",
+                    "Проверить форсунку цилиндра 1 (на стенде или перестановкой).",
+                    "Проверить компрессию в цилиндре 1.",
+                    "Проверить подсос воздуха во впускном коллекторе."
+                ],
+                note: "Если ошибка повторяется после замены свечей и катушек — проверьте форсунки и механическую часть двигателя."
+            },
+            "P0420": {
+                desc: "Низкая эффективность катализатора (Bank 1). Часто сопровождается запахом серы и снижением мощности.",
+                checklist: [
+                    "Проверить задний датчик кислорода (лямбда-зонд) — его показания.",
+                    "Проверить герметичность выпускной системы (трещины, прокладки).",
+                    "Проверить, не горит ли масло (расход масла может убить катализатор).",
+                    "Оценить состояние катализатора (эндоскопом или по разнице давления)."
+                ],
+                note: "⚠️ Замена катализатора — дорогое удовольствие. Сначала убедитесь, что проблема не в лямбда-зонде."
+            },
+            "P0171": {
+                desc: "Слишком бедная топливная смесь (Bank 1). Двигатель может работать нестабильно на холостых.",
+                checklist: [
+                    "Проверить подсос воздуха (патрубки, прокладки впускного коллектора, вакуумные шланги).",
+                    "Проверить датчик массового расхода воздуха (ДМРВ) — почистить или заменить.",
+                    "Проверить давление топлива (насос, фильтр).",
+                    "Проверить форсунки на засорение."
+                ],
+                note: "Частая причина — подсос воздуха после ДМРВ. Используйте дымогенератор для поиска утечек."
+            },
+            "00537": {
+                desc: "Лямбда-регулирование (VAG). Смесь слишком бедная или богатая. Часто встречается на VW/Audi.",
+                checklist: [
+                    "Проверить лямбда-зонд (передний) — показания в реальном времени.",
+                    "Проверить подсос воздуха (особенно на VAG — патрубки, клапан PCV).",
+                    "Проверить давление топлива и производительность насоса.",
+                    "Проверить форсунки на герметичность и распыл."
+                ],
+                note: "На VAG часто виноват клапан PCV или треснувший патрубок вентиляции картера."
+            },
+            "U0100": {
+                desc: "Потеря связи с блоком управления двигателем (ECM/PCM). Может сопровождаться отказом запуска или аварийным режимом.",
+                checklist: [
+                    "Проверить питание и массу на блоке ECM.",
+                    "Проверить CAN-шину (обрыв, короткое замыкание).",
+                    "Проверить разъемы и контакты на блоке ECM.",
+                    "Проверить предохранители, отвечающие за ECM."
+                ],
+                note: "⚠️ Если ошибка появляется периодически — ищите плохой контакт в разъемах или перетертый провод."
+            }
+        };
+
+        function searchCode() {
+            const input = document.getElementById('codeInput').value.trim().toUpperCase();
+            const resultDiv = document.getElementById('result');
+            const errorDiv = document.getElementById('errorMsg');
+
+            // Сброс
+            resultDiv.classList.remove('active');
+            errorDiv.classList.remove('active');
+
+            if (!input) return;
+
+            const data = db[input];
+
+            if (data) {
+                document.getElementById('resultCode').textContent = `Код: ${input}`;
+                document.getElementById('resultDesc').textContent = data.desc;
+
+                const ul = document.getElementById('checklist');
+                ul.innerHTML = '';
+                data.checklist.forEach(item => {
+                    const li = document.createElement('li');
+                    // Если в тексте есть "⚠" — добавим класс warn
+                    if (item.includes('⚠') || item.toLowerCase().includes('опасно')) {
+                        li.classList.add('warn');
+                    }
+                    li.textContent = item;
+                    ul.appendChild(li);
+                });
+
+                document.getElementById('resultNote').textContent = data.note;
+                resultDiv.classList.add('active');
+            } else {
+                errorDiv.classList.add('active');
+            }
+        }
+
+        function setCode(code) {
+            document.getElementById('codeInput').value = code;
+            searchCode();
+        }
+
+        // Поиск по Enter
+        document.getElementById('codeInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') searchCode();
+        });
+    </script>
+</body>
+</html>
